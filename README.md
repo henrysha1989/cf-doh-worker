@@ -1,6 +1,6 @@
 # 🚀 Cloudflare Worker 自建专属 DoH 服务
 
-本项目利用 Cloudflare Workers 免费额度，搭建了一个支持 **TLS + DoH + ECH** 全加密保护的专属 DNS 解析服务。主要用于配合代理软件（如 Shadowrocket、Clash 等）进行海外域名防污染解析，同时隐藏个人上网的 SNI 特征。
+本项目利用 Cloudflare Workers 免费额度，搭建了一个支持 **TLS + DoH + ECH** 全加密保护的专属 DNS 解析服务。主要用于配合代理软件（如 Shadowrocket ）进行海外域名防污染解析，同时隐藏个人上网的 SNI 特征。
 
 ## ✨ 特性
 - **极速响应**：平均 CPU 执行时间仅 ~0.36ms，极其轻量。
@@ -29,7 +29,7 @@
 
 ## ⚙️ 客户端最佳分工配置
 
-不要将自建 DoH 填入备用 DNS，应当配合代理软件进行**分流网络优化**：
+配合代理软件进行**分流网络优化**：
 
 ### 1. 国内常规 DNS（走直连，追求极速）
 用于解析国内微信、淘宝、国内游戏等，保留极低延迟：
@@ -38,10 +38,10 @@
 
 ### 2. 代理/远程 DNS（走自建，追求绝对隐私）
 在软件的 `proxy-server-dns` 或远程 DNS 中填入你的专属地址：
-- `https://doh.521989.xyz/dns-query`
+- `https://doh.yourdomain.com/dns-query`
 
 ---
 
 ## 🔍 验证运行状态
 - **后台指标**：访问海外网站后，登录 CF 后台查看该 Worker 的 **Metrics**，若 `Requests` 图表有波动且错误率为 0，即代表成功运行。
-- **隐私测试**：开启代理软件全局模式，访问 DnsLeakTest，测试结果中应清一色显示 `CLOUDFLARENET`，无国内运营商泄漏。
+
