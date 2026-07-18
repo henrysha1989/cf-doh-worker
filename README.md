@@ -19,7 +19,7 @@
 为了绕过默认域名在境内的网络干扰，并安全开启 ECH 保护：
 1. 在刚刚创建的 Worker 页面中，切换到 **设置 (Settings)** -> **域和路由 (Domains & Routes)**。
 2. 点击 **添加 (Add)** -> 选择 **自定义域 (Custom Domain)**。
-3. 填入你托管在 CF 上的二级域名（例如：`doh.xxx.xyz`），点击绑定。
+3. 填入你托管在 CF 上的二级域名（例如：`doh.yourdomain.com`），点击绑定。
 
 ### 第三步：关闭默认分配域名（防白嫖）
 1. 在 Worker 页面右侧找到 **Worker URL** 区域。
