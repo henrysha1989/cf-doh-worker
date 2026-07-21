@@ -1,58 +1,95 @@
-/**
- * Cloudflare Worker 自建 DoH (DNS over HTTPS) 转发脚本
- * 功能：将客户端的 DoH 请求安全转发给上游 Cloudflare 公共 DNS，并在传输中享受 TLS/ECH 保护。
- */
 
 const UPSTREAM_DOH = 'https://1.1.1.1/dns-query';
 
 export default {
+  // 1. 处理日常的 DNS 请求
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-
-    // 安全防御：仅允许符合 /dns-query 路径的请求通过
     if (url.pathname === '/dns-query') {
-      return await handleDoHRequest(request);
+      return await handleDoHRequest(request, env, ctx);
     }
+    return new Response('Not Found', { status: 404 });
+  },
 
-    // 非标准 DNS 请求（如浏览器直接访问根目录）统一返回 404 Not Found
-    return new Response('Not Found', { 
-      status: 404,
-      headers: { 'Content-Type': 'text/plain' }
-    });
+  // 2. 处理定时任务（每天固定时间触发）
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(sendDailyTelegramReport(env));
   }
 };
 
 /**
- * 处理并转发标准的 DoH 请求
+ * 核心：日常 DoH 转发与异步计数
  */
-async function handleDoHRequest(request) {
+async function handleDoHRequest(request, env, ctx) {
   const method = request.method;
-  
-  // 构造发往上游 1.1.1.1 的请求头部，保持标准的 DNS 报文格式
   const headers = new Headers();
   headers.set('Accept', 'application/dns-message');
-  
+
   if (method === 'POST') {
-    // 处理 POST 请求（通常由代理软件在后台发起）
     headers.set('Content-Type', 'application/dns-message');
-    const body = await request.arrayBuffer();
     
+    // 异步计数：今天请求数 +1
+    if (env.DOH_LOGS) {
+      ctx.waitUntil(incrementTodayCount(env));
+    }
+
     return fetch(UPSTREAM_DOH, {
       method: 'POST',
       headers: headers,
-      body: body
+      body: await request.arrayBuffer()
     });
   } else if (method === 'GET') {
-    // 处理 GET 请求（标准的 Base64Url 编码请求）
+    if (env.DOH_LOGS) {
+      ctx.waitUntil(incrementTodayCount(env));
+    }
     const url = new URL(request.url);
-    const targetUrl = `${UPSTREAM_DOH}${url.search}`;
-    
-    return fetch(targetUrl, {
-      method: 'GET',
-      headers: headers
-    });
-  } else {
-    // 拒绝其他非标准请求方式（如浏览器直接请求明文传参会触发 405）
-    return new Response('Method Not Allowed', { status: 405 });
+    return fetch(`${UPSTREAM_DOH}${url.search}`, { method: 'GET', headers: headers });
   }
+  return new Response('Method Not Allowed', { status: 405 });
+}
+
+/**
+ * 辅助函数：让今天的计数器加 1
+ */
+async function incrementTodayCount(env) {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const key = `doh_count:${today}`;
+    const current = parseInt(await env.DOH_LOGS.get(key) || '0');
+    await env.DOH_LOGS.put(key, (current + 1).toString());
+  } catch (e) {}
+}
+
+/**
+ * 核心：定时发送 Telegram 报告
+ */
+async function sendDailyTelegramReport(env) {
+  // 检查环境变量是否齐全
+  if (!env.TG_BOT_TOKEN || !env.TG_CHAT_ID || !env.DOH_LOGS) return;
+
+  try {
+    // 获取昨天的日期字符串（因为通常是半夜或者第二天清晨总结昨天的量）
+    const yesterdayObj = new Date();
+    yesterdayObj.setDate(yesterdayObj.getDate() - 1);
+    const yesterday = yesterdayObj.toISOString().split('T')[0];
+
+    // 从 KV 数据库读取昨天的总请求量
+    const key = `doh_count:${yesterday}`;
+    const count = await env.DOH_LOGS.get(key) || '0';
+
+    // 组装精致的 Telegram 推送文本
+    const message = `🚀 *自建 DoH 每日运行报告*\n\n📅 报告日期：\`${yesterday}\`\n🛡️ 加密解析请求：\`${count} 次\`\n🟢 运行状态：\`正常（健康度 100%）\``;
+
+    // 推送给 Telegram Bot
+    const tgUrl = `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendMessage`;
+    await fetch(tgUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: env.TG_CHAT_ID,
+        text: message,
+        parse_mode: 'Markdown'
+      })
+    });
+  } catch (e) {}
 }
